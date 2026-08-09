@@ -1,27 +1,36 @@
-import os
-import subprocess
+"""Telegram message sending."""
+
+import logging
+
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 class Notifier:
-    def __init__(self, bot_token: str = None, chat_id: str = None):
-        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
-        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID")
+    def __init__(self, bot_token: str) -> None:
+        self.api = f"https://api.telegram.org/bot{bot_token}"
 
-    def open_in_firefox(self, url: str):
-        """Opens the given URL in Firefox."""
+    def send(self, chat_id, text: str) -> bool:
+        """Send a plain-text message to a chat. Returns True on success."""
+        if not chat_id:
+            logger.warning("No chat_id given; skipping message.")
+            return False
         try:
-            subprocess.run(["open", "-a", "Firefox", url], check=True)
-        except Exception as e:
-            print(f"[!] Could not open Firefox: {e}")
+            response = requests.post(
+                f"{self.api}/sendMessage",
+                json={"chat_id": chat_id, "text": text},
+                timeout=10,
+            )
+            response.raise_for_status()
+            return True
+        except requests.RequestException as exc:
+            logger.error(
+                "Telegram send failed (status=%s): %s",
+                getattr(exc.response, "status_code", None),
+                exc.__class__.__name__,
+            )
+            return False
 
-    def send_telegram_alert(self, message: str):
-        """Sends a push notification via Telegram Bot."""
-        if not self.bot_token or not self.chat_id:
-            return
-        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-        payload = {"chat_id": self.chat_id, "text": message, "parse_mode": "Markdown"}
-        try:
-            requests.post(url, json=payload, timeout=10)
-        except Exception as e:
-            print(f"[!] Telegram Notification Error: {e}")
+
+__all__ = ["Notifier"]

@@ -1,44 +1,62 @@
-import time
-from bms_tracker.scraper import BMSScraper
+"""Entry point: runs the Telegram bot and the booking tracker together."""
+
+import logging
+import signal
+import threading
+
+from bms_tracker import config
+from bms_tracker.bot import TelegramBot
 from bms_tracker.notifier import Notifier
+from bms_tracker.scraper import BMSScraper
+from bms_tracker.store import Store
+from bms_tracker.tracker import Tracker
 
 
-def main():
+def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-8s %(name)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    logger = logging.getLogger("bms-tracker")
+
+    if not config.TELEGRAM_BOT_TOKEN:
+        logger.error("TELEGRAM_BOT_TOKEN is not set. Check the .env file.")
+        return
+
+    store = Store(config.DATA_FILE)
     scraper = BMSScraper()
-    notifier = Notifier()
-    interval = 180  # 3 minutes
+    notifier = Notifier(config.TELEGRAM_BOT_TOKEN)
 
-    print("==================================================")
-    print("  Allu Cinemas (Kokapet) - Booking Tracker         ")
-    print("==================================================")
-    print(f"[*] Monitoring URL: {scraper.venue_url}")
-    print(f"[*] Check Interval: Every {interval} seconds\n")
+    tracker = Tracker(store, notifier, scraper, config.INTERVAL_SECONDS)
 
-    notified = False
+    bot = TelegramBot(
+        config.TELEGRAM_BOT_TOKEN,
+        store,
+        scraper,
+        notifier,
+        on_change=tracker.on_config_changed,
+        interval_seconds=config.INTERVAL_SECONDS,
+    )
 
-    while True:
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] Checking BookMyShow...")
+    bot_thread = threading.Thread(target=bot.run, daemon=True)
+    bot_thread.start()
 
-        is_open = scraper.check_showtimes()
+    def shutdown(_signum, _frame) -> None:
+        logger.info("Shutting down...")
+        tracker.stop()
+        bot.stop()
 
-        if is_open and not notified:
-            alert_msg = (
-                "🎟️ **BOOKING OPEN!** 🎟️\n\n"
-                "Allu Cinemas (Kokapet) bookings are now open on BookMyShow!\n\n"
-                f"URL: {scraper.venue_url}"
-            )
-            print("\n🎉 MATCH FOUND! Sending notifications...")
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
 
-            notifier.open_in_firefox(scraper.venue_url)
-            notifier.send_telegram_alert(alert_msg)
-            notified = True
-
-        elif not is_open:
-            print("  └─ Not available yet. Waiting for next cycle...")
-            notified = False
-
-        time.sleep(interval)
+    try:
+        tracker.run()
+    except KeyboardInterrupt:
+        tracker.stop()
+        bot.stop()
+    finally:
+        logger.info("Exiting.")
 
 
 if __name__ == "__main__":
