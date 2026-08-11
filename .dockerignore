@@ -1,0 +1,12 @@
+.git/
+.gitignore
+.env
+*.log
+bms_data.json
+bms-tracker.iml
+.idea/
+.pytest_cache/
+__pycache__/
+*.egg-info/
+venv/
+**/__pycache__/

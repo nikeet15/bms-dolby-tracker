@@ -1,8 +1,10 @@
 """Entry point: runs the Telegram bot and the booking tracker together."""
 
 import logging
+import os
 import signal
 import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from bms_tracker import config
 from bms_tracker.bot import TelegramBot
@@ -10,6 +12,24 @@ from bms_tracker.notifier import Notifier
 from bms_tracker.scraper import BMSScraper
 from bms_tracker.store import Store
 from bms_tracker.tracker import Tracker
+
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802 (http.server convention)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, *args) -> None:  # silence request logs
+        pass
+
+
+def _start_health_server(port: int) -> ThreadingHTTPServer:
+    """Serve a minimal / health endpoint for container platforms."""
+    server = ThreadingHTTPServer(("0.0.0.0", port), _HealthHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
 
 
 def main() -> None:
@@ -27,6 +47,14 @@ def main() -> None:
     store = Store(config.DATA_FILE)
     scraper = BMSScraper()
     notifier = Notifier(config.TELEGRAM_BOT_TOKEN)
+
+    health_port = os.getenv("BMS_HEALTH_PORT")
+    if health_port:
+        try:
+            _start_health_server(int(health_port))
+            logger.info("Health server listening on port %s.", health_port)
+        except (ValueError, OSError) as exc:
+            logger.warning("Could not start health server on port %s: %s", health_port, exc)
 
     tracker = Tracker(store, notifier, scraper, config.INTERVAL_SECONDS)
 
