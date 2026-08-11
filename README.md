@@ -14,13 +14,7 @@ The bot is named **BMSTracker** on Telegram.
    pip install -e .
    ```
 
-2. Install Playwright's Chromium (used to scrape BookMyShow):
-
-   ```bash
-   playwright install chromium
-   ```
-
-3. Create a `.env` file in the project root:
+2. Create a `.env` file in the project root:
 
    ```bash
    cp .env.example .env   # or create it manually
@@ -28,7 +22,7 @@ The bot is named **BMSTracker** on Telegram.
 
    Fill in your values (see [Configuration](#configuration)).
 
-4. Start the bot:
+3. Start the bot:
 
    ```bash
    bms-tracker
@@ -47,7 +41,6 @@ Create a `.env` file with these values:
 | Variable                | Required | Default                                                   | Description                          |
 | ----------------------- | -------- | --------------------------------------------------------- | ------------------------------------ |
 | `TELEGRAM_BOT_TOKEN`    | Yes      | —                                                         | Bot token from @BotFather            |
-| `TELEGRAM_CHAT_ID`      | No       | —                                                         | Your chat ID (used to log in, not yet enforced) |
 | `BMS_INTERVAL_SECONDS`  | No       | `900`                                                     | How often the tracker checks (seconds) |
 | `BMS_DATA_FILE`         | No       | `bms_data.json`                                           | Where per-chat settings are stored   |
 | `BMS_VENUE_URL`         | No       | Allu Cinemas Kokapet buy-tickets URL                      | Venue base URL to watch              |
@@ -59,10 +52,6 @@ Create a `.env` file with these values:
 1. Open Telegram and search for **@BotFather**.
 2. Send `/newbot`, choose a name (e.g. `BMSTracker`) and a username (e.g. `@bms_track_bot`).
 3. Copy the token BotFather gives you into `TELEGRAM_BOT_TOKEN`.
-
-### Getting your chat ID
-
-Open a chat with **@userinfobot** (or with your bot and use `/start`), and copy the numeric ID it shows into `TELEGRAM_CHAT_ID`.
 
 ## Usage in Telegram
 

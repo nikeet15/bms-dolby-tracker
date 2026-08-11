@@ -6,7 +6,7 @@ from datetime import date
 from typing import List, Optional
 
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
+from curl_cffi import requests as cffi_requests
 
 from bms_tracker import config
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Safari/537.36"
+    "Chrome/124.0.0.0 Safari/537.36"
 )
 TIME_RE = re.compile(r"(\d{1,2}:\d{2}\s*[AP]M)", re.IGNORECASE)
 
@@ -29,30 +29,25 @@ class BMSScraper:
         """Build the venue URL for a YYYYMMDD day string."""
         return config.VENUE_URL + day
 
-    def fetch_page(self, url: Optional[str] = None) -> str:
-        return self._load_page(url)[0]
-
     def _load_page(self, url: Optional[str] = None):
         """Load a page and return (html, final_url) after any redirects."""
         target = url or self.venue_url
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=["--disable-blink-features=AutomationControlled"],
-            )
-            try:
-                context = browser.new_context(
-                    user_agent=USER_AGENT,
-                    locale="en-US",
-                    viewport={"width": 1440, "height": 900},
-                    timezone_id="Asia/Kolkata",
-                )
-                page = context.new_page()
-                page.goto(target, timeout=60000, wait_until="domcontentloaded")
-                page.wait_for_timeout(8000)
-                return page.content(), page.url
-            finally:
-                browser.close()
+        response = cffi_requests.get(
+            target,
+            impersonate="chrome",
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": (
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                    "image/avif,image/webp,*/*;q=0.8"
+                ),
+            },
+            timeout=30,
+            allow_redirects=True,
+        )
+        response.raise_for_status()
+        return response.text, str(response.url)
 
     def _bookable_labels(self, day: Optional[str] = None) -> List[str]:
         url = self.url_for(day) if day else self.venue_url
@@ -67,9 +62,6 @@ class BMSScraper:
             b.get("aria-label", "")
             for b in soup.select('[role="button"][aria-label^="Book "]')
         ]
-
-    def check_showtimes(self, day: Optional[str] = None) -> bool:
-        return bool(self._bookable_labels(day))
 
     def fetch_showtimes(self, day: Optional[str] = None) -> List[str]:
         """Return sorted unique showtimes (e.g. ['07:00 PM', '09:00 PM'])."""
