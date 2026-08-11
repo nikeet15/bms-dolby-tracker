@@ -13,7 +13,8 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY --chown=bot:bot . .
+RUN pip install --no-deps .
 
 USER bot
 
-CMD ["python", "-m", "bms_tracker.cli"]
+CMD ["bms-tracker"]
